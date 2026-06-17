@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+tmp/
+sample_images/*.jpg
+sample_images/*.png
+sample_images/*.heic
+sample_results/*.json
