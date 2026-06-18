@@ -76,6 +76,11 @@ VERDICT LOGIC (follow strictly):
                          sodium 25-50% of daily limit for hypertensive users
 - SAFE (green) if: none of the above triggered
 
+CRITICAL ALLERGEN RULE:
+- "allergens_detected" MUST only contain allergens that are explicitly listed in the user's profile allergies AND detected in the product.
+- Do NOT list or flag any allergens that are not in the user's profile.
+- If a product contains an ingredient like peanuts, but the user does NOT have "peanut" listed in their profile allergies (or has "none"), do NOT list it in "allergens_detected", do NOT mention it in the verdict reasons, and do NOT downgrade the verdict (it is SAFE for this user).
+
 All Roman Urdu strings must be in plain Roman script (no Urdu script characters),
 written the way a Pakistani would text — e.g. "Yeh aap ke liye munasib nahi"
 NOT "یہ آپ کے لیے مناسب نہیں".
@@ -104,10 +109,15 @@ def generate_verdict_openai(label_data: dict, user_profile: dict) -> dict:
     client = init_client()
     
     prompt_text = VERDICT_PROMPT_TEMPLATE
+    user_allergies = user_profile.get("allergies", [])
+    filtered_allergen_map = {
+        k: v for k, v in ALLERGEN_MAP.items() if k in user_allergies
+    }
+    
     prompt_text = prompt_text.replace("{user_profile_json}", json.dumps(user_profile, indent=2))
     prompt_text = prompt_text.replace("{label_data_json}", json.dumps(label_data, indent=2))
     prompt_text = prompt_text.replace("{hidden_sugars_json}", json.dumps(HIDDEN_SUGARS, indent=2))
-    prompt_text = prompt_text.replace("{allergen_map_json}", json.dumps(ALLERGEN_MAP, indent=2))
+    prompt_text = prompt_text.replace("{allergen_map_json}", json.dumps(filtered_allergen_map, indent=2))
     prompt_text = prompt_text.replace("{daily_limits_json}", json.dumps(DAILY_LIMITS, indent=2))
     
     response = client.chat.completions.create(
@@ -136,12 +146,17 @@ def generate_verdict_groq(label_data: dict, user_profile: dict) -> dict:
     import json
     from openai import OpenAI
 
+    user_allergies = user_profile.get("allergies", [])
+    filtered_allergen_map = {
+        k: v for k, v in ALLERGEN_MAP.items() if k in user_allergies
+    }
+
     # Build the same prompt as generate_verdict_openai
     prompt_text = VERDICT_PROMPT_TEMPLATE
     prompt_text = prompt_text.replace("{user_profile_json}", json.dumps(user_profile, indent=2))
     prompt_text = prompt_text.replace("{label_data_json}", json.dumps(label_data, indent=2))
     prompt_text = prompt_text.replace("{hidden_sugars_json}", json.dumps(HIDDEN_SUGARS, indent=2))
-    prompt_text = prompt_text.replace("{allergen_map_json}", json.dumps(ALLERGEN_MAP, indent=2))
+    prompt_text = prompt_text.replace("{allergen_map_json}", json.dumps(filtered_allergen_map, indent=2))
     prompt_text = prompt_text.replace("{daily_limits_json}", json.dumps(DAILY_LIMITS, indent=2))
 
     client = OpenAI(
