@@ -21,7 +21,7 @@ Pakistan has 33M diabetics (world's highest after China). Packaged food labels h
 ```bash
 pip install -r requirements.txt
 # Add your OpenAI key to .env
-streamlit run src/app.py
+streamlit run app.py
 ```
 
 ## Tech stack
