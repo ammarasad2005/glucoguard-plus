@@ -1,32 +1,43 @@
 import os
 from dotenv import load_dotenv
+import streamlit as st
 
 # Call load_dotenv() at module import time
 load_dotenv()
 
+# Define a helper to load secrets from Streamlit secrets or environment variables
+def get_secret(key, default=None):
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
 # Define environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
-OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4o-mini")
-OPENAI_SEARCH_MODEL = os.getenv("OPENAI_SEARCH_MODEL", "gpt-4o-search-preview")
-OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
-OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "nova")
+OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+OPENAI_VISION_MODEL = get_secret("OPENAI_VISION_MODEL", "gpt-4o-mini")
+OPENAI_TEXT_MODEL = get_secret("OPENAI_TEXT_MODEL", "gpt-4o-mini")
+OPENAI_SEARCH_MODEL = get_secret("OPENAI_SEARCH_MODEL", "gpt-4o-search-preview")
+OPENAI_TTS_MODEL = get_secret("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = get_secret("OPENAI_TTS_VOICE", "nova")
 
 def validate_env():
     if not OPENAI_API_KEY:
-        raise EnvironmentError("OPENAI_API_KEY nahi mila. Hackathon organizers se shared key lein aur .env mein daalein.")
+        raise EnvironmentError("OPENAI_API_KEY nahi mila. Hackathon organizers se shared key lein aur secrets mein daalein.")
 
 # Call validate_env() at the bottom of the file
 validate_env()
 
 # Fallback provider keys (optional — fallback only triggers if OpenAI fails)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-2.0-flash")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-AriaNeural")
-FALLBACK_ENABLED = os.getenv("FALLBACK_ENABLED", "false").lower() == "true"
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+GEMINI_VISION_MODEL = get_secret("GEMINI_VISION_MODEL", "gemini-2.0-flash")
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+GROQ_TEXT_MODEL = get_secret("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
+TAVILY_API_KEY = get_secret("TAVILY_API_KEY")
+EDGE_TTS_VOICE = get_secret("EDGE_TTS_VOICE", "en-US-AriaNeural")
+FALLBACK_ENABLED = str(get_secret("FALLBACK_ENABLED", "false")).lower() == "true"
+
 
 def fallback_status() -> dict:
     """Return a dict showing which fallback providers are configured."""
