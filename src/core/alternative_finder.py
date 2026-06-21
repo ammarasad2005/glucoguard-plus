@@ -1,5 +1,8 @@
 from openai import OpenAI
-from src.config.settings import OPENAI_API_KEY, OPENAI_SEARCH_MODEL, GROQ_API_KEY, GROQ_TEXT_MODEL, TAVILY_API_KEY
+from src.config.settings import (
+    OPENAI_API_KEY, OPENAI_SEARCH_MODEL, GROQ_API_KEY, GROQ_TEXT_MODEL,
+    TAVILY_API_KEY, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
+)
 import requests
 import json
 
@@ -217,7 +220,118 @@ Return JSON now."""
     result = with_fallback(synthesize_groq, synthesize_glm)
     print(f"[alternative_finder] Synthesis complete alternative: {result.get('alternative_product')}")
     return result
+def find_alternative_google_cse(label_data: dict, verdict: dict, user_profile: dict) -> dict:
+    """Google Custom Search API + LLM fallback for finding real alternatives."""
+    product_name = label_data.get("product_name") or "this product"
+    brand = label_data.get("brand") or ""
+    conditions = ", ".join(user_profile.get("conditions", []))
+    allergies = ", ".join(user_profile.get("allergies", []))
+
+    search_query = (
+        f"healthier alternative to {product_name} {brand} in Pakistan "
+        f"for {conditions} {allergies} "
+        f"site:naheed.com OR site:daraz.pk OR site:chaseup.com.pk"
+    )
+
+    if not GOOGLE_CSE_API_KEY or not GOOGLE_CSE_CX:
+        raise ValueError("Google CSE API key ya CX configuration missing hai.")
+
+    try:
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": GOOGLE_CSE_API_KEY,
+            "cx": GOOGLE_CSE_CX,
+            "q": search_query,
+            "num": 5
+        }
+        response = requests.get(url, params=params, timeout=12)
+        response.raise_for_status()
+        data = response.json()
+        
+        search_results = []
+        for item in data.get("items", []):
+            search_results.append({
+                "title": item.get("title"),
+                "url": item.get("link"),
+                "content": item.get("snippet")
+            })
+    except Exception as e:
+        print(f"[alternative_finder] Google Custom Search failed: {e}")
+        search_results = []
+
+    synthesis_prompt = f"""Based on these web search results, return ONLY valid JSON with these keys:
+{{
+  "alternative_product": string or null,
+  "alternative_brand": string or null,
+  "why_better_roman_urdu": string,
+  "where_to_buy": [string],
+  "estimated_price_pkr": number or null,
+  "online_link": string or null,
+  "search_sources": [string]
+}}
+
+Search query: {search_query}
+Top results:
+{json.dumps(search_results[:3], indent=2)}
+
+Rules:
+- alternative_product must be a REAL product found in the search results, or null if none found
+- why_better_roman_urdu: 1-2 sentences in Roman Urdu (no Urdu script)
+- where_to_buy: Pakistani store names from the results
+- search_sources: URLs of the results used
+- If no real alternative found, return alternative_product=null
+
+Return JSON now."""
+
+    def synthesize_openai():
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model=OPENAI_SEARCH_MODEL,
+            messages=[
+                {"role": "system", "content": "You synthesize web search results into JSON. Always return valid JSON only."},
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            response_format={"type": "json_object"} if "gpt-4o" in OPENAI_SEARCH_MODEL else None,
+            temperature=0.3,
+            max_tokens=800
+        )
+        return json.loads(response.choices[0].message.content)
+
+    def synthesize_glm():
+        from src.config.settings import GLM_API_KEY, GLM_TEXT_MODEL
+        client = OpenAI(
+            api_key=GLM_API_KEY,
+            base_url="https://open.bigmodel.cn/api/paas/v4"
+        )
+        response = client.chat.completions.create(
+            model=GLM_TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "You synthesize web search results into JSON. Always return valid JSON only."},
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            max_tokens=800,
+            extra_body={
+                "thinking": {
+                    "type": "disabled"
+                }
+            }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    from src.core.fallback import with_fallback
+    result = with_fallback(synthesize_openai, synthesize_glm)
+    print(f"[alternative_finder] Google CSE synthesis complete alternative: {result.get('alternative_product')}")
+    return result
+
 
 def find_alternative(label_data, verdict, user_profile):
     from src.core.fallback import with_fallback
-    return with_fallback(find_alternative_openai, find_alternative_tavily, label_data, verdict, user_profile)
+
+    # Chain: OpenAI (Primary) -> Google Custom Search (1st Fallback) -> Tavily (2nd Fallback)
+    def google_then_tavily(*args, **kwargs):
+        return with_fallback(find_alternative_google_cse, find_alternative_tavily, *args, **kwargs)
+
+    return with_fallback(find_alternative_openai, google_then_tavily, label_data, verdict, user_profile)
+

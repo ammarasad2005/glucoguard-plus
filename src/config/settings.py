@@ -35,6 +35,8 @@ GEMINI_VISION_MODEL = get_secret("GEMINI_VISION_MODEL", "gemini-2.0-flash")
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GROQ_TEXT_MODEL = get_secret("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
 TAVILY_API_KEY = get_secret("TAVILY_API_KEY")
+GOOGLE_CSE_API_KEY = get_secret("GOOGLE_CSE_API_KEY")
+GOOGLE_CSE_CX = get_secret("GOOGLE_CSE_CX")
 EDGE_TTS_VOICE = get_secret("EDGE_TTS_VOICE", "en-US-AriaNeural")
 FALLBACK_ENABLED = str(get_secret("FALLBACK_ENABLED", "false")).lower() == "true"
 
@@ -50,6 +52,7 @@ def fallback_status() -> dict:
         "gemini": bool(GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIza")),
         "groq": bool(GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_")),
         "tavily": bool(TAVILY_API_KEY and TAVILY_API_KEY.startswith("tvly-")),
+        "google_cse": bool(GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX),
         "glm": bool(GLM_API_KEY),
         "edge_tts": True,  # always available, no key needed
     }
