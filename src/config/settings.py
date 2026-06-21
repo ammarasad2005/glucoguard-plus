@@ -38,6 +38,11 @@ TAVILY_API_KEY = get_secret("TAVILY_API_KEY")
 EDGE_TTS_VOICE = get_secret("EDGE_TTS_VOICE", "en-US-AriaNeural")
 FALLBACK_ENABLED = str(get_secret("FALLBACK_ENABLED", "false")).lower() == "true"
 
+# GLM Fallback keys (Zhipu AI)
+GLM_API_KEY = get_secret("GLM_API_KEY")
+GLM_TEXT_MODEL = get_secret("GLM_TEXT_MODEL", "GLM-4.7-Flash")
+GLM_VISION_MODEL = get_secret("GLM_VISION_MODEL", "GLM-4.6V-Flash")
+
 
 def fallback_status() -> dict:
     """Return a dict showing which fallback providers are configured."""
@@ -45,5 +50,6 @@ def fallback_status() -> dict:
         "gemini": bool(GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIza")),
         "groq": bool(GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_")),
         "tavily": bool(TAVILY_API_KEY and TAVILY_API_KEY.startswith("tvly-")),
+        "glm": bool(GLM_API_KEY),
         "edge_tts": True,  # always available, no key needed
     }

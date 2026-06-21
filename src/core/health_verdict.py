@@ -178,6 +178,63 @@ def generate_verdict_groq(label_data: dict, user_profile: dict) -> dict:
     print(f"[health_verdict] Groq fallback verdict: {result['verdict']}")
     return result
 
+def generate_verdict_glm(label_data: dict, user_profile: dict) -> dict:
+    """GLM fallback for verdict generation."""
+    import json
+    from openai import OpenAI
+    from src.config.settings import GLM_API_KEY, GLM_TEXT_MODEL
+
+    user_allergies = user_profile.get("allergies", [])
+    filtered_allergen_map = {
+        k: v for k, v in ALLERGEN_MAP.items() if k in user_allergies
+    }
+
+    prompt_text = VERDICT_PROMPT_TEMPLATE
+    prompt_text = prompt_text.replace("{user_profile_json}", json.dumps(user_profile, indent=2))
+    prompt_text = prompt_text.replace("{label_data_json}", json.dumps(label_data, indent=2))
+    prompt_text = prompt_text.replace("{hidden_sugars_json}", json.dumps(HIDDEN_SUGARS, indent=2))
+    prompt_text = prompt_text.replace("{allergen_map_json}", json.dumps(filtered_allergen_map, indent=2))
+    prompt_text = prompt_text.replace("{daily_limits_json}", json.dumps(DAILY_LIMITS, indent=2))
+
+    client = OpenAI(
+        api_key=GLM_API_KEY,
+        base_url="https://open.bigmodel.cn/api/paas/v4"
+    )
+    response = client.chat.completions.create(
+        model=GLM_TEXT_MODEL,
+        messages=[
+            {"role": "system", "content": "You are GlucoGuard+, a personalized food safety verdict engine. You always respond with valid JSON only."},
+            {"role": "user", "content": prompt_text}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.2,
+        max_tokens=2000,
+        extra_body={
+            "thinking": {
+                "type": "disabled"
+            }
+        }
+    )
+    response_text = response.choices[0].message.content.strip()
+
+    # Strip markdown fences if present
+    if response_text.startswith("```"):
+        parts = response_text.split("```")
+        response_text = parts[1] if len(parts) > 1 else response_text
+        if response_text.startswith("json"):
+            response_text = response_text[4:]
+        response_text = response_text.strip("` \n")
+
+    result = json.loads(response_text)
+    print(f"[health_verdict] GLM fallback verdict: {result['verdict']}")
+    return result
+
 def generate_verdict(label_data, user_profile):
     from src.core.fallback import with_fallback
-    return with_fallback(generate_verdict_openai, generate_verdict_groq, label_data, user_profile)
+
+    # Chain: OpenAI -> Groq -> GLM
+    def groq_then_glm(*args, **kwargs):
+        return with_fallback(generate_verdict_groq, generate_verdict_glm, *args, **kwargs)
+
+    return with_fallback(generate_verdict_openai, groq_then_glm, label_data, user_profile)
+

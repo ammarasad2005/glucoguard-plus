@@ -110,6 +110,57 @@ def scan_label_gemini(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict
     print(f"[label_scanner] Gemini fallback scan complete — confidence {result.get('confidence')}")
     return result
 
+def scan_label_glm(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+    """GLM fallback for label scanning."""
+    from openai import OpenAI
+    from src.config.settings import GLM_API_KEY, GLM_VISION_MODEL
+
+    client = OpenAI(
+        api_key=GLM_API_KEY,
+        base_url="https://open.bigmodel.cn/api/paas/v4"
+    )
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    data_url = f"data:{mime_type};base64,{b64}"
+
+    response = client.chat.completions.create(
+        model=GLM_VISION_MODEL,
+        messages=[
+            {"role": "system", "content": "You are GlucoGuard+, a food label scanner for Pakistani consumers. You always respond with valid JSON only."},
+            {"role": "user", "content": [
+                {"type": "text", "text": SCAN_PROMPT},
+                {"type": "image_url", "image_url": {"url": data_url}}
+            ]}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+        max_tokens=1500,
+        extra_body={
+            "thinking": {
+                "type": "disabled"
+            }
+        }
+    )
+
+    response_text = response.choices[0].message.content.strip()
+
+    # Strip markdown fences if present
+    if response_text.startswith("```"):
+        parts = response_text.split("```")
+        response_text = parts[1] if len(parts) > 1 else response_text
+        if response_text.startswith("json"):
+            response_text = response_text[4:]
+        response_text = response_text.strip("` \n")
+
+    result = json.loads(response_text)
+    print(f"[label_scanner] GLM fallback scan complete — confidence {result.get('confidence')}")
+    return result
+
 def scan_label(image_bytes, mime_type="image/jpeg"):
     from src.core.fallback import with_fallback
-    return with_fallback(scan_label_openai, scan_label_gemini, image_bytes, mime_type)
+
+    # Chain: OpenAI -> Gemini -> GLM
+    def gemini_then_glm(*args, **kwargs):
+        return with_fallback(scan_label_gemini, scan_label_glm, *args, **kwargs)
+
+    return with_fallback(scan_label_openai, gemini_then_glm, image_bytes, mime_type)
+

@@ -597,7 +597,7 @@ def step_indicator(current_step: int = 0):
 def resilience_sidebar(fb: dict):
     """Render the resilience layer in the sidebar."""
     items = ""
-    labels = {"gemini": "Gemini (vision)", "groq": "Groq (reasoning)", "tavily": "Tavily (search)", "edge_tts": "edge-tts (voice)"}
+    labels = {"gemini": "Gemini (vision)", "groq": "Groq (reasoning)", "tavily": "Tavily (search)", "glm": "GLM (Zhipu AI)", "edge_tts": "edge-tts (voice)"}
     for k, v in fb.items():
         icon = "✅" if v else "⚠️"
         items += f'<div class="gg-resilience-item">{icon} {labels.get(k, k)}</div>'

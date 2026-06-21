@@ -173,22 +173,49 @@ Rules:
 
 Return JSON now."""
 
-    client = OpenAI(
-        api_key=GROQ_API_KEY,
-        base_url="https://api.groq.com/openai/v1"
-    )
-    response = client.chat.completions.create(
-        model=GROQ_TEXT_MODEL,
-        messages=[
-            {"role": "system", "content": "You synthesize web search results into JSON. Always return valid JSON only."},
-            {"role": "user", "content": synthesis_prompt}
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.3,
-        max_tokens=800
-    )
-    result = json.loads(response.choices[0].message.content)
-    print(f"[alternative_finder] Tavily+Groq fallback alternative: {result.get('alternative_product')}")
+    def synthesize_groq():
+        client = OpenAI(
+            api_key=GROQ_API_KEY,
+            base_url="https://api.groq.com/openai/v1"
+        )
+        response = client.chat.completions.create(
+            model=GROQ_TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "You synthesize web search results into JSON. Always return valid JSON only."},
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            max_tokens=800
+        )
+        return json.loads(response.choices[0].message.content)
+
+    def synthesize_glm():
+        from src.config.settings import GLM_API_KEY, GLM_TEXT_MODEL
+        client = OpenAI(
+            api_key=GLM_API_KEY,
+            base_url="https://open.bigmodel.cn/api/paas/v4"
+        )
+        response = client.chat.completions.create(
+            model=GLM_TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "You synthesize web search results into JSON. Always return valid JSON only."},
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            max_tokens=800,
+            extra_body={
+                "thinking": {
+                    "type": "disabled"
+                }
+            }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    from src.core.fallback import with_fallback
+    result = with_fallback(synthesize_groq, synthesize_glm)
+    print(f"[alternative_finder] Synthesis complete alternative: {result.get('alternative_product')}")
     return result
 
 def find_alternative(label_data, verdict, user_profile):
